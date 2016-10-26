@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+import Levenshtein
+import os
+import sys
+
+from subprocess import Popen, PIPE
+from collections import defaultdict
+
+
+class MailMapper(object):
+
+    def __init__(self, repository_path):
+        self.mailmap_path = os.path.join(repository_path,'.mailmap')
+        self.mapped_authors = defaultdict(list)
+
+    def create_mailmap(self):
+        self.load_map()
+
+        cmd = 'git log --format="%aN|<%aE>" | sort -u'
+        p = Popen([cmd], shell=True, stdout=PIPE, env={'GIT_DIR': os.path.join(repository_path, '.git')})
+        (output, _) = p.communicate()
+        for line in output.decode().strip().split('\n'):
+            author, email = line.split('|')
+            if author not in self.mapped_authors:
+                print('Missing mapping for {} {}'.format(author, email))
+                new_author = self.prompt_for_author(author, email)
+                if new_author:
+                    self.mapped_authors[new_author].append(email)
+
+        self.save_map()
+
+    def load_map(self):
+        with open(self.mailmap_path) as f:
+            for line in f:
+                author, email = line.strip().split('\t')
+                self.mapped_authors[author].append(email)
+
+    def save_map(self):
+        with open(self.mailmap_path, 'w') as f:
+            for author, emails in sorted(self.mapped_authors.items()):
+                for email in emails:
+                    f.write('{}\t{}\n'.format(author, email))
+
+    def prompt_for_author(self, author, email):
+        use_original = self.yn_prompt('Do you want to use the name {}?'.format(author))
+        if use_original:
+            return author
+
+        suggested_match = self.suggest_match(author)
+        use_suggestion = self.yn_prompt('Do you want to map {} to {}?'.format(author, suggested_match))
+        if use_suggestion:
+            return suggested_match
+
+        while True:
+            user_author = input('Please write the name of the author you want to map to {}: '.format(email))
+            use_input = self.yn_prompt('Are you sure you want to map {} to {}?'.format(email, user_author))
+            if use_input:
+                return user_author
+
+    def suggest_match(self, target):
+        suggestion = None
+        min_dist = float('inf')
+
+        for author in self.mapped_authors:
+            cur_dist = Levenshtein.distance(target, author)
+            if cur_dist < min_dist:
+                min_dist = cur_dist
+                suggestion = author
+
+        return suggestion
+
+    def yn_prompt(self, query):
+        while True:
+            choice = input('{} [Y/n] '.format(query)).lower()
+            if choice == '' or choice in ['yes', 'y']:
+                return True
+            elif choice in ['no', 'n']:
+                return False
+            else:
+                print('Invalid input')
+
+
+if __name__ == '__main__':
+    repository_path = sys.argv[1]
+    mapper = MailMapper(repository_path)
+    mapper.create_mailmap()
