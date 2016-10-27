@@ -13,6 +13,7 @@ class MailMapper(object):
     def __init__(self, repository_path):
         self.mailmap_path = os.path.join(repository_path,'.mailmap')
         self.mapped_authors = defaultdict(set)
+        self.mapped_emails = set()
 
     def create_mailmap(self):
         self.load_map()
@@ -22,11 +23,12 @@ class MailMapper(object):
         (output, _) = p.communicate()
         for line in output.decode().strip().split('\n'):
             author, email = line.split('|')
-            if author not in self.mapped_authors:
+            if author not in self.mapped_authors and email not in self.mapped_emails:
                 print('Missing mapping for {} {}'.format(author, email))
                 new_author = self.prompt_for_author(author, email)
                 if new_author:
                     self.mapped_authors[new_author].add(email)
+                    self.mapped_emails.add(email)
 
         self.save_map()
 
@@ -35,6 +37,7 @@ class MailMapper(object):
             for line in f:
                 author, email = line.strip().split('\t')
                 self.mapped_authors[author].add(email)
+                self.mapped_emails.add(email)
 
     def save_map(self):
         with open(self.mailmap_path, 'w') as f:
