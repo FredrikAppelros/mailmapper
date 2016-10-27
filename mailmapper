@@ -50,6 +50,10 @@ class MailMapper(object):
         if use_original:
             return author
 
+        skip = self.yn_prompt('Do you want to skip {} {}?'.format(author, email))
+        if skip:
+            return None
+
         suggested_match = self.suggest_match(author)
         use_suggestion = self.yn_prompt('Do you want to map {} to {}?'.format(author, suggested_match))
         if use_suggestion:
